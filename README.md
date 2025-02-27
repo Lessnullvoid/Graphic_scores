@@ -56,6 +56,104 @@ This tool bridges the gap between visual scores and sound generation through sev
   - `/image/scan_avg_size`
   - `/image/scan_max_size`
 
+## OSC Data Structure and Transmission
+
+The program transmits data via OSC (Open Sound Control) protocol on port 8000. Here's a detailed map of the data structure:
+
+### 1. Static Analysis Mode (Press 'a')
+
+```
+/image/object_count [int]
+└── Total number of detected objects/keypoints in the image
+    Range: 0 to n (depends on image complexity)
+    Update rate: On analysis completion
+    Example: /image/object_count 42
+```
+
+### 2. Dynamic Scanning Mode (Press 'b')
+
+```
+/image/scan_object_count [int]
+├── Number of objects in current scan window
+│   Range: 0 to n
+│   Update rate: Per scan step
+│   Example: /image/scan_object_count 5
+│
+/image/scan_min_size [float]
+├── Minimum size of detected features
+│   Range: 0.0 to n.n
+│   Update rate: Per scan step
+│   Example: /image/scan_min_size 1.2
+│
+/image/scan_avg_size [float]
+├── Average size of detected features
+│   Range: 0.0 to n.n
+│   Update rate: Per scan step
+│   Example: /image/scan_avg_size 3.7
+│
+/image/scan_max_size [float]
+└── Maximum size of detected features
+    Range: 0.0 to n.n
+    Update rate: Per scan step
+    Example: /image/scan_max_size 8.4
+```
+
+### Data Characteristics
+
+1. **Transmission Rate**
+   - Static Analysis: Once per analysis
+   - Dynamic Scanning: Continuous updates based on scan speed
+   - Scan speed = score duration / image width
+
+2. **Value Ranges**
+   - Object Count: Integer values (0 to ∞)
+   - Size Metrics: Float values (typically 0.0 to 20.0)
+   - All values are normalized to image dimensions
+
+3. **Timing and Synchronization**
+   - Base Port: 8000
+   - Protocol: UDP
+   - Host: localhost (127.0.0.1)
+   - No handshake required
+
+### Example OSC Applications
+
+1. **Sound Synthesis**
+   ```
+   /image/scan_object_count → Amplitude/Density
+   /image/scan_avg_size    → Frequency/Pitch
+   /image/scan_max_size    → Filter Cutoff
+   /image/scan_min_size    → Modulation Depth
+   ```
+
+2. **Spatial Audio**
+   ```
+   Scan Position → Stereo/Multichannel Panning
+   Object Count  → Reverb Amount
+   Feature Sizes → Sound Source Width
+   ```
+
+3. **Rhythmic Generation**
+   ```
+   Object Count     → Rhythm Density
+   Feature Sizes    → Note Velocity
+   Scan Position    → Time Position
+   ```
+
+### Integration Examples
+
+```python
+# Pure Data / Max/MSP
+# OSC receive objects:
+[netreceive 8000]
+[route /image/scan_object_count /image/scan_avg_size]
+
+# SuperCollider
+OSCdef(\imageAnalysis, {|msg, time, addr, recvPort|
+    msg[1].postln; // First value of message
+}, '/image/scan_object_count');
+```
+
 ## Usage
 
 ### Installation
