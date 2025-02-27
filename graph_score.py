@@ -129,7 +129,7 @@ class ScoreGUI:
         self.main_frame = ttk.Frame(root, padding="10")
         self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        # Create score list
+        # Create score list frame with integrated duration
         self.score_frame = ttk.LabelFrame(self.main_frame, text="Scores", padding="5")
         self.score_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
@@ -140,22 +140,20 @@ class ScoreGUI:
         self.score_listbox.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S))
         scrollbar.grid(row=0, column=2, sticky=(tk.N, tk.S))
         
-        # Bind listbox selection event
-        self.score_listbox.bind('<<ListboxSelect>>', self.on_select_score)
+        # Duration input frame
+        self.duration_frame = ttk.Frame(self.score_frame)
+        self.duration_frame.grid(row=1, column=0, columnspan=2, pady=5, sticky=(tk.W, tk.E))
         
-        # Total duration label
-        self.duration_label = ttk.Label(self.score_frame, text="Total Duration: 0s")
-        self.duration_label.grid(row=1, column=0, columnspan=2, pady=5)
-        
-        # Current score label
-        self.current_score_label = ttk.Label(self.score_frame, text="No score selected")
-        self.current_score_label.grid(row=2, column=0, columnspan=2, pady=5)
+        ttk.Label(self.duration_frame, text="Duration (s):").pack(side=tk.LEFT, padx=5)
+        self.duration_var = tk.StringVar(value="30")
+        self.duration_entry = ttk.Entry(self.duration_frame, textvariable=self.duration_var, width=10)
+        self.duration_entry.pack(side=tk.LEFT, padx=5)
         
         # Button frame
         self.button_frame = ttk.Frame(self.score_frame)
-        self.button_frame.grid(row=3, column=0, columnspan=2, pady=5)
+        self.button_frame.grid(row=2, column=0, columnspan=2, pady=5)
         
-        # Add score buttons with state handling
+        # Add score buttons
         self.add_button = ttk.Button(self.button_frame, text="Add Score", command=self.add_score)
         self.add_button.grid(row=0, column=0, padx=5)
         
@@ -163,88 +161,69 @@ class ScoreGUI:
                                       command=self.remove_score, state='disabled')
         self.remove_button.grid(row=0, column=1, padx=5)
         
-        # Control buttons frame
-        self.control_frame = ttk.LabelFrame(self.main_frame, text="Controls", padding="5")
-        self.control_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=10)
-        
-        # Analysis buttons
-        self.analyze_button = ttk.Button(self.control_frame, text="Start Analysis", 
+        # Control buttons
+        self.analyze_button = ttk.Button(self.button_frame, text="Start Analysis", 
                                        command=self.start_analysis, state='disabled')
-        self.analyze_button.grid(row=0, column=0, padx=5, pady=5)
+        self.analyze_button.grid(row=0, column=2, padx=5)
         
-        self.auto_play_button = ttk.Button(self.control_frame, text="Start Auto Play", 
+        self.auto_play_button = ttk.Button(self.button_frame, text="Start Auto Play", 
                                          command=self.start_auto_play, state='disabled')
-        self.auto_play_button.grid(row=0, column=1, padx=5, pady=5)
+        self.auto_play_button.grid(row=0, column=3, padx=5)
         
         # Status label
         self.status_label = ttk.Label(self.main_frame, text="Ready - Add scores to begin")
-        self.status_label.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=5)
+        self.status_label.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=5)
         
         # Configure grid weights
         self.main_frame.columnconfigure(0, weight=1)
         self.score_frame.columnconfigure(0, weight=1)
         
+        # Bind listbox selection event
+        self.score_listbox.bind('<<ListboxSelect>>', self.on_select_score)
+        
         # Bind window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
-        # Initialize analysis window reference
-        self.analysis_window = None
+    def add_score(self):
+        try:
+            duration = float(self.duration_var.get())
+            if duration <= 0:
+                raise ValueError("Duration must be positive")
+        except ValueError as e:
+            tk.messagebox.showerror("Error", "Please enter a valid positive number for duration")
+            return
+            
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff")]
+        )
         
+        if file_path:
+            self.score_manager.add_score(file_path, duration)
+            self.update_score_list()
+            self.status_label.config(text=f"Added: {os.path.basename(file_path)}")
+            self.analyze_button.config(state='normal')
+            self.auto_play_button.config(state='normal')
+    
+    def update_score_list(self):
+        self.score_listbox.delete(0, tk.END)
+        for path, duration in self.score_manager.scores:
+            basename = os.path.basename(path)
+            self.score_listbox.insert(tk.END, f"{basename:<40} {duration:>5.1f}s")
+        if self.score_manager.scores:
+            self.score_listbox.selection_set(0)
+            self.on_select_score(None)
+            
     def on_select_score(self, event):
         selection = self.score_listbox.curselection()
         if selection:
             path, duration = self.score_manager.scores[selection[0]]
-            self.current_score_label.config(text=f"Selected: {os.path.basename(path)}")
+            self.duration_var.set(str(duration))
             self.remove_button.config(state='normal')
             self.analyze_button.config(state='normal')
             self.auto_play_button.config(state='normal')
         else:
-            self.current_score_label.config(text="No score selected")
             self.remove_button.config(state='disabled')
-        
-    def update_duration_label(self):
-        total_duration = self.score_manager.get_total_duration()
-        minutes = int(total_duration // 60)
-        seconds = total_duration % 60
-        self.duration_label.config(text=f"Total Duration: {minutes}m {seconds:.1f}s")
-        
-    def add_score(self):
-        self.status_label.config(text="Selecting file...")
-        file_path = filedialog.askopenfilename(
-            filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff")]
-        )
-        if file_path:
-            duration_dialog = tk.Toplevel(self.root)
-            duration_dialog.title("Set Duration")
-            duration_dialog.geometry("200x100")
-            duration_dialog.transient(self.root)
-            duration_dialog.grab_set()
             
-            ttk.Label(duration_dialog, text="Duration (seconds):").pack(pady=5)
-            duration_var = tk.StringVar(value="30")
-            duration_entry = ttk.Entry(duration_dialog, textvariable=duration_var)
-            duration_entry.pack(pady=5)
-            
-            def confirm():
-                try:
-                    duration = float(duration_var.get())
-                    self.score_manager.add_score(file_path, duration)
-                    self.update_score_list()
-                    self.update_duration_label()
-                    self.status_label.config(text=f"Added: {os.path.basename(file_path)}")
-                    self.analyze_button.config(state='normal')
-                    self.auto_play_button.config(state='normal')
-                    duration_dialog.destroy()
-                except ValueError:
-                    tk.messagebox.showerror("Error", "Please enter a valid number")
-            
-            ttk.Button(duration_dialog, text="OK", command=confirm).pack(pady=5)
-            
-            # Center dialog
-            duration_dialog.geometry(f"+{self.root.winfo_x() + 50}+{self.root.winfo_y() + 50}")
-        else:
-            self.status_label.config(text="Ready")
-    
     def remove_score(self):
         selection = self.score_listbox.curselection()
         if selection:
@@ -255,16 +234,7 @@ class ScoreGUI:
                 self.analyze_button.config(state='disabled')
                 self.auto_play_button.config(state='disabled')
                 self.remove_button.config(state='disabled')
-                self.current_score_label.config(text="No score selected")
-            
-    def update_score_list(self):
-        self.score_listbox.delete(0, tk.END)
-        for path, duration in self.score_manager.scores:
-            self.score_listbox.insert(tk.END, f"{os.path.basename(path)} ({duration}s)")
-        if self.score_manager.scores:
-            self.score_listbox.selection_set(0)
-            self.on_select_score(None)
-            
+                
     def start_analysis(self):
         if not self.score_manager.scores:
             tk.messagebox.showerror("Error", "Please add at least one score")
@@ -307,8 +277,7 @@ class ScoreGUI:
             self.auto_play_button.config(state='normal')
             
     def on_closing(self):
-        if self.analysis_window:
-            cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
         self.root.destroy()
 
 def analyze_image(image, display_image):
